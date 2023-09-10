@@ -51,43 +51,32 @@ fn create_or_update_password(mode: PasswordMode, config_path: &Path) -> Result<(
         PasswordMode::UpdatePassword => {
             let config = OpenOptions::new().write(true).read(true).open(config_path);
             match config {
-                Ok(mut file) => {
-                    match prompt_password("Please enter your previous password: ") {
-                        Ok(pass_to_check) => match read(config_path) {
-                            Ok(file_text) => {
-                                let mut hasher = Sha256::new();
-                                hasher.update(pass_to_check.as_bytes());
-                                let pass_to_check_hashed = format!("{:x}", hasher.finalize());
+                Ok(mut file) => match prompt_password("Please enter your previous password: ") {
+                    Ok(pass_to_check) => match read(config_path) {
+                        Ok(file_text) => match check_pass(config_path, &pass_to_check) {
+                            Ok(_) => {
                                 let file_text_string = String::from_utf8(file_text).unwrap();
-                                //get sha256 hash
-                                let existing_password = &file_text_string[0..=63];
-                                if existing_password == pass_to_check_hashed {
-                                    let new_pass =
-                                        prompt_password("Please enter your new password: ")
-                                            .unwrap();
-                                    let mut new_pass_hasher = Sha256::new();
-                                    new_pass_hasher.update(new_pass.as_bytes());
-                                    let mut new_pass_hashed =
-                                        format!("{:x}", new_pass_hasher.finalize());
-                                    new_pass_hashed.push_str(&file_text_string[64..]);
-                                    match file.set_len(0) {
-                                        Ok(_) => {}
-                                        Err(_) => {
-                                            return Err(());
-                                        }
+                                let new_pass =
+                                    prompt_password("Please enter your new password: ").unwrap();
+                                let mut new_pass_hasher = Sha256::new();
+                                new_pass_hasher.update(new_pass.as_bytes());
+                                let mut new_pass_hashed =
+                                    format!("{:x}", new_pass_hasher.finalize());
+                                new_pass_hashed.push_str(&file_text_string[64..]);
+                                match file.set_len(0) {
+                                    Ok(_) => {}
+                                    Err(_) => {
+                                        return Err(());
                                     }
-                                    match file.write(new_pass_hashed.as_bytes()) {
-                                        Ok(_) => {
-                                            return Ok(());
-                                        }
-                                        Err(_) => {
-                                            println!("Error while updating the password");
-                                            return Err(());
-                                        }
+                                }
+                                match file.write(new_pass_hashed.as_bytes()) {
+                                    Ok(_) => {
+                                        return Ok(());
                                     }
-                                } else {
-                                    println!("Wrong password!");
-                                    return Err(());
+                                    Err(_) => {
+                                        println!("Error while updating the password");
+                                        return Err(());
+                                    }
                                 }
                             }
                             Err(_) => {
@@ -97,8 +86,11 @@ fn create_or_update_password(mode: PasswordMode, config_path: &Path) -> Result<(
                         Err(_) => {
                             return Err(());
                         }
+                    },
+                    Err(_) => {
+                        return Err(());
                     }
-                }
+                },
                 Err(error) => {
                     println!("Error while opening template.tbl. {}", error);
                     return Err(());
@@ -110,8 +102,34 @@ fn create_or_update_password(mode: PasswordMode, config_path: &Path) -> Result<(
 fn find_files(file_list: Vec<String>) {
     todo!()
 }
-fn check_pass(config_path: &Path, pass: &str) -> Result<(), ()> {
-    todo!()
+fn check_pass(config_path: &Path, pass_to_check: &str) -> Result<(), ()> {
+    match read(config_path) {
+        Ok(file_text_utf8) => match String::from_utf8(file_text_utf8) {
+            Ok(file_text_string) => match file_text_string.lines().nth(0) {
+                Some(current_password) => {
+                    let mut hasher = Sha256::new();
+                    hasher.update(pass_to_check.as_bytes());
+                    let pass_to_check_hashed = format!("{:x}", hasher.finalize());
+                    let current_password_string = String::from(current_password);
+                    if pass_to_check_hashed == current_password_string {
+                        return Ok(());
+                    } else {
+                        println!("Wrong password!");
+                        return Err(());
+                    }
+                }
+                None => {
+                    return Err(());
+                }
+            },
+            Err(_) => {
+                return Err(());
+            }
+        },
+        Err(_) => {
+            return Err(());
+        }
+    };
 }
 fn add_regexp_to_file(config_path: &Path, regexp: &str) -> Result<(), String> {
     match OpenOptions::new()
