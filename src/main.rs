@@ -1,3 +1,4 @@
+use regex::Regex;
 use rpassword::prompt_password;
 use sha2::{Digest, Sha256};
 use std::env::args;
@@ -109,6 +110,30 @@ fn create_or_update_password(mode: PasswordMode, config_path: &Path) -> Result<(
 fn find_files(file_list: Vec<String>) {
     todo!()
 }
+fn check_pass(config_path: &Path, pass: &str) -> Result<(), ()> {
+    todo!()
+}
+fn add_regexp_to_file(config_path: &Path, regexp: &str) -> Result<(), String> {
+    match OpenOptions::new()
+        .write(true)
+        .append(true)
+        .open(config_path)
+    {
+        Ok(mut file) => {
+            match file.write(regexp.as_bytes()) {
+                Ok(_) => {
+                    return Ok(());
+                }
+                Err(_) => {
+                    return Result::Err(String::from("Error while writing template.tbl"));
+                }
+            };
+        }
+        Err(_) => {
+            return Result::Err(String::from("Error while opening template.tbl"));
+        }
+    };
+}
 fn main() -> Result<(), ()> {
     let uid: u32 = unsafe { geteuid() };
     let mut is_config = false;
@@ -152,6 +177,25 @@ fn main() -> Result<(), ()> {
                         create_or_update_password(mode, config)?;
                     }
                 }
+                "add" => match args().nth(2) {
+                    Some(mut regexp_pattern) => {
+                        match Regex::new(&regexp_pattern) {
+                            Ok(_) => {
+                                regexp_pattern.push('\n');
+                                let _ = add_regexp_to_file(config, &regexp_pattern);
+                                return Ok(());
+                            }
+                            Err(_) => {
+                                println!("Error while parsing a regular expression");
+                                return Err(());
+                            }
+                        };
+                    }
+                    None => {
+                        println!("Missing regexp patern");
+                        return Err(());
+                    }
+                },
                 _ => {
                     println!("Wrong arg");
                 }
