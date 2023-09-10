@@ -131,7 +131,7 @@ fn check_pass(config_path: &Path, pass_to_check: &str) -> Result<(), ()> {
         }
     };
 }
-fn add_regexp_to_file(config_path: &Path, regexp: &str) -> Result<(), String> {
+fn add_regexp_to_file(config_path: &Path, regexp: &str) -> Result<(), ()> {
     match OpenOptions::new()
         .write(true)
         .append(true)
@@ -143,19 +143,20 @@ fn add_regexp_to_file(config_path: &Path, regexp: &str) -> Result<(), String> {
                     return Ok(());
                 }
                 Err(_) => {
-                    return Result::Err(String::from("Error while writing template.tbl"));
+                    println!("Error while writing template.tbl");
+                    return Err(());
                 }
             };
         }
         Err(_) => {
-            return Result::Err(String::from("Error while opening template.tbl"));
+            println!("Error while opening template.tbl");
+            return Err(());
         }
     };
 }
 fn main() -> Result<(), ()> {
     let uid: u32 = unsafe { geteuid() };
     let mut is_config = false;
-    let file_list = Vec::<String>::new();
     if uid != 0 {
         println!("You must be a root user to run this program.");
         //return Err(());
@@ -165,12 +166,10 @@ fn main() -> Result<(), ()> {
         Ok(existence) => {
             if existence {
                 is_config = true;
-                println!("Found template.tbl");
             } else {
                 let mode = PasswordMode::CreatePassword;
-                println!("Creating template.tbl");
                 create_or_update_password(mode, config)?;
-                println!("Successfully updated password");
+                return Ok(());
             }
         }
         Err(_) => {
@@ -178,53 +177,49 @@ fn main() -> Result<(), ()> {
             return Err(());
         }
     }
-    let argv = args().nth(1);
-    match argv {
-        Some(sec_arg) => {
-            let arg_str = sec_arg.as_str();
-            match arg_str {
-                "-h" => {
-                    todo!()
-                }
-                "--help" => {
-                    todo!()
-                }
-                "passwd" => {
-                    if is_config {
-                        let mode = PasswordMode::UpdatePassword;
-                        create_or_update_password(mode, config)?;
-                    }
-                }
-                "add" => match args().nth(2) {
-                    Some(mut regexp_pattern) => {
-                        match Regex::new(&regexp_pattern) {
-                            Ok(_) => {
-                                regexp_pattern.push('\n');
-                                let _ = add_regexp_to_file(config, &regexp_pattern);
-                                return Ok(());
-                            }
-                            Err(_) => {
-                                println!("Error while parsing a regular expression");
-                                return Err(());
-                            }
-                        };
-                    }
-                    None => {
-                        println!("Missing regexp patern");
-                        return Err(());
-                    }
-                },
-                _ => {
-                    println!("Wrong arg");
+    match args().nth(1) {
+        Some(first_arg) => match first_arg.as_str() {
+            "-h" => {
+                todo!()
+            }
+            "--help" => {
+                todo!()
+            }
+            "passwd" => {
+                if is_config {
+                    let mode = PasswordMode::UpdatePassword;
+                    create_or_update_password(mode, config)?;
                 }
             }
-        }
+            "add" => match args().nth(2) {
+                Some(mut regexp_pattern) => {
+                    match Regex::new(&regexp_pattern) {
+                        Ok(_) => {
+                            regexp_pattern.push('\n');
+                            add_regexp_to_file(config, &regexp_pattern)?;
+                        }
+                        Err(_) => {
+                            println!("Error while parsing a regular expression");
+                            return Err(());
+                        }
+                    };
+                }
+                None => {
+                    println!("Missing regexp patern");
+                    return Err(());
+                }
+            },
+            _ => {
+                println!("Wrong arg");
+            }
+        },
         None => {}
     }
-    let dir = read_dir(".").expect("Failed to open dir");
+    /*    let dir = read_dir(".").expect("Failed to open dir");
     for files in dir {
         println!("{}", files.as_ref().unwrap().path().display(),);
         if files.as_ref().unwrap().file_type().unwrap().is_file() {}
     }
+     */
     Ok(())
 }
