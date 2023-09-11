@@ -35,12 +35,34 @@ fn create_or_update_password(mode: PasswordMode, config_path: &Path) {
             config
                 .write(hash.as_bytes())
                 .expect("Error while writing to template.tbl");
+            Command::new("chattr")
+                .arg("+i")
+                .arg(config_path)
+                .output()
+                .expect(
+                    format!(
+                        "Error while changing attributes of {}",
+                        config_path.display()
+                    )
+                    .as_str(),
+                );
         }
         PasswordMode::UpdatePassword => {
             let pass_to_check = prompt_password("Please enter your previous password: ")
                 .expect("Can't read password");
             match check_pass(config_path, &pass_to_check) {
                 Ok(_) => {
+                    Command::new("chattr")
+                        .arg("-i")
+                        .arg(config_path)
+                        .output()
+                        .expect(
+                            format!(
+                                "Error while changing attributes of {}",
+                                config_path.display()
+                            )
+                            .as_str(),
+                        );
                     let mut config = File::open(config_path).expect("Can't open template.tbl");
                     let mut file_text_string = String::new();
                     config
@@ -52,18 +74,26 @@ fn create_or_update_password(mode: PasswordMode, config_path: &Path) {
                         .truncate(true)
                         .open(config_path)
                         .expect("Can't open template.tbl");
-
-                    println!("{:?}", file_text_string);
                     let new_pass = prompt_password("Please enter your new password: ")
                         .expect("Can't read password");
                     let mut new_pass_hasher = Sha256::new();
                     new_pass_hasher.update(new_pass.as_bytes());
                     let mut new_pass_hashed = format!("{:x}", new_pass_hasher.finalize());
                     new_pass_hashed.push_str(&file_text_string[64..]);
-                    println!("{:?}", new_pass_hashed);
                     config
                         .write(new_pass_hashed.as_bytes())
                         .expect("Error while updating the password");
+                    Command::new("chattr")
+                        .arg("+i")
+                        .arg(config_path)
+                        .output()
+                        .expect(
+                            format!(
+                                "Error while changing attributes of {}",
+                                config_path.display()
+                            )
+                            .as_str(),
+                        );
                 }
                 Err(_) => {}
             }
@@ -184,6 +214,17 @@ fn check_pass(config_path: &Path, pass_to_check: &str) -> Result<(), ()> {
     }
 }
 fn add_regexp_to_file(config_path: &Path, regexp: &str) {
+    Command::new("chattr")
+        .arg("-i")
+        .arg(config_path)
+        .output()
+        .expect(
+            format!(
+                "Error while changing attributes of {}",
+                config_path.display()
+            )
+            .as_str(),
+        );
     let mut file = OpenOptions::new()
         .write(true)
         .append(true)
@@ -191,6 +232,17 @@ fn add_regexp_to_file(config_path: &Path, regexp: &str) {
         .expect("Error while opening template.tbl");
     file.write(regexp.as_bytes())
         .expect("Error while writing template.tb");
+    Command::new("chattr")
+        .arg("+i")
+        .arg(config_path)
+        .output()
+        .expect(
+            format!(
+                "Error while changing attributes of {}",
+                config_path.display()
+            )
+            .as_str(),
+        );
 }
 fn main() -> Result<(), ()> {
     let uid: u32 = unsafe { geteuid() };
