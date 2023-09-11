@@ -6,12 +6,17 @@ use std::fs::{read, read_dir, OpenOptions};
 use std::io::Write;
 use std::os::unix::prelude::OpenOptionsExt;
 use std::path::Path;
+use std::process::Command;
 extern "C" {
     fn geteuid() -> u32;
 }
 enum PasswordMode {
     CreatePassword,
     UpdatePassword,
+}
+enum FileProtection {
+    TurnOn,
+    TurnOff,
 }
 fn create_or_update_password(mode: PasswordMode, config_path: &Path) -> Result<(), ()> {
     match mode {
@@ -99,8 +104,99 @@ fn create_or_update_password(mode: PasswordMode, config_path: &Path) -> Result<(
         }
     }
 }
-fn find_files(file_list: Vec<String>) {
-    todo!()
+fn turn_on_or_off(config_path: &Path, mode: FileProtection) {
+    let mut regexp_list = Vec::<Regex>::new();
+    let file = read(config_path).expect("Can't read template.tbl");
+    let file_text_string = String::from_utf8(file).expect("Invalid unicode in template.tbl");
+    let file_lines = file_text_string.lines();
+    for (index, line) in file_lines.enumerate() {
+        if index == 0 {
+            continue;
+        }
+        regexp_list.push(Regex::new(line).expect("Found an invalid regular expression"));
+    }
+    let dir = read_dir(".").expect("Failed to open dir");
+    let pass = prompt_password("Please enter your password: ").expect("Password entry failed");
+    match check_pass(config_path, &pass) {
+        Ok(_) => {
+            for files in dir {
+                for regexp in &regexp_list {
+                    let file_name = files.as_ref().unwrap().file_name();
+                    let pattern = file_name
+                        .as_os_str()
+                        .to_str()
+                        .expect("The file name contains invalid Unicode");
+                    match regexp.captures(pattern) {
+                        Some(_) => match mode {
+                            FileProtection::TurnOn => {
+                                Command::new("chown")
+                                    .arg("root")
+                                    .arg(files.as_ref().unwrap().file_name())
+                                    .output()
+                                    .expect(
+                                        format!(
+                                            "Error while changing owner of {}",
+                                            files.as_ref().unwrap().path().display()
+                                        )
+                                        .as_str(),
+                                    );
+                                Command::new("chmod")
+                                    .arg("700")
+                                    .arg(files.as_ref().unwrap().file_name())
+                                    .output()
+                                    .expect(
+                                        format!(
+                                            "Error while changing mode of {}",
+                                            files.as_ref().unwrap().path().display()
+                                        )
+                                        .as_str(),
+                                    );
+                                Command::new("chattr")
+                                    .arg("+i")
+                                    .arg(files.as_ref().unwrap().file_name())
+                                    .output()
+                                    .expect(
+                                        format!(
+                                            "Error while changing attributes of {}",
+                                            files.as_ref().unwrap().path().display()
+                                        )
+                                        .as_str(),
+                                    );
+                            }
+                            FileProtection::TurnOff => {
+                                Command::new("chattr")
+                                    .arg("-i")
+                                    .arg(files.as_ref().unwrap().file_name())
+                                    .output()
+                                    .expect(
+                                        format!(
+                                            "Error while changing attributes of {}",
+                                            files.as_ref().unwrap().path().display()
+                                        )
+                                        .as_str(),
+                                    );
+                                Command::new("chmod")
+                                    .arg("777")
+                                    .arg(files.as_ref().unwrap().file_name())
+                                    .output()
+                                    .expect(
+                                        format!(
+                                            "Error while changing mode of {}",
+                                            files.as_ref().unwrap().path().display()
+                                        )
+                                        .as_str(),
+                                    );
+                            }
+                        },
+                        None => {
+                            //skiping
+                        }
+                    }
+                }
+            }
+        }
+        Err(_) => {}
+    }
 }
 fn check_pass(config_path: &Path, pass_to_check: &str) -> Result<(), ()> {
     match read(config_path) {
@@ -209,6 +305,14 @@ fn main() -> Result<(), ()> {
                     return Err(());
                 }
             },
+            "on" => {
+                let mode = FileProtection::TurnOn;
+                turn_on_or_off(config, mode);
+            }
+            "off" => {
+                let mode = FileProtection::TurnOff;
+                turn_on_or_off(config, mode);
+            }
             _ => {
                 println!("Wrong arg");
             }
