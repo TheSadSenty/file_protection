@@ -245,49 +245,43 @@ fn add_regexp_to_file(config_path: &Path, regexp: &str) {
         );
 }
 fn print_help() {
-    println!(
-        "Usage: {}\tcreate a configuration file and set a password",
-        args().nth(0).expect("No program name was passed")
-    );
+    println!("init\t\tCreate a configuration file and set a password");
     println!("add\t\tAdd a regexp template to the config file");
     println!("passwd\t\tChange password");
     println!("on\t\tTurn on security measures");
     println!("off\t\tTurn off security measures");
     println!("--help,-h\tPrint help");
+    println!("Example:");
+    println!(
+        "{} add \"test[0-9].txt\"\tThe program would protect test0.txt, test1.txt, test2.txt, ...",
+        args().nth(0).expect("Can't fetch the program name")
+    );
 }
 fn main() -> Result<(), ()> {
     let uid: u32 = unsafe { geteuid() };
-    let mut is_config = false;
     if uid != 0 {
         println!("You must be a root user to run this program.");
         return Err(());
     }
     let config = Path::new("./template.tbl");
-    match config.try_exists() {
-        Ok(existence) => {
-            if existence {
-                is_config = true;
-            } else {
-                let mode = PasswordMode::CreatePassword;
-                create_or_update_password(mode, config);
-                return Ok(());
-            }
-        }
-        Err(_) => {
-            println!("Can't check existence of template.tbl");
-            return Err(());
-        }
-    }
     match args().nth(1) {
         Some(first_arg) => match first_arg.as_str() {
             "-h" => print_help(),
             "--help" => print_help(),
-            "passwd" => {
-                if is_config {
-                    let mode = PasswordMode::UpdatePassword;
-                    create_or_update_password(mode, config);
+            "passwd" => match config.try_exists() {
+                Ok(existence) => {
+                    if existence {
+                        let mode = PasswordMode::UpdatePassword;
+                        create_or_update_password(mode, config);
+                    } else {
+                        println!("Need to init the config file with the \"init\" command");
+                    }
                 }
-            }
+                Err(_) => {
+                    println!("Can't check existence of template.tbl");
+                    return Err(());
+                }
+            },
             "add" => match args().nth(2) {
                 Some(mut regexp_pattern) => {
                     match Regex::new(&regexp_pattern) {
@@ -314,6 +308,20 @@ fn main() -> Result<(), ()> {
                 let mode = FileProtection::TurnOff;
                 turn_on_or_off(config, mode);
             }
+            "init" => match config.try_exists() {
+                Ok(existence) => {
+                    if existence {
+                        println!("Config already exists");
+                    } else {
+                        let mode = PasswordMode::CreatePassword;
+                        create_or_update_password(mode, config);
+                    }
+                }
+                Err(_) => {
+                    println!("Can't check existence of template.tbl");
+                    return Err(());
+                }
+            },
             _ => {
                 println!("Wrong arg");
             }
