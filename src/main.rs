@@ -244,6 +244,17 @@ fn add_regexp_to_file(config_path: &Path, regexp: &str) {
             .as_str(),
         );
 }
+fn print_help() {
+    println!(
+        "Usage: {}\tcreate a configuration file and set a password",
+        args().nth(0).expect("No program name was passed")
+    );
+    println!("add\t\tAdd a regexp template to the config file");
+    println!("passwd\t\tChange password");
+    println!("on\t\tTurn on security measures");
+    println!("off\t\tTurn off security measures");
+    println!("--help,-h\tPrint help");
+}
 fn main() -> Result<(), ()> {
     let uid: u32 = unsafe { geteuid() };
     let mut is_config = false;
@@ -269,12 +280,8 @@ fn main() -> Result<(), ()> {
     }
     match args().nth(1) {
         Some(first_arg) => match first_arg.as_str() {
-            "-h" => {
-                todo!()
-            }
-            "--help" => {
-                todo!()
-            }
+            "-h" => print_help(),
+            "--help" => print_help(),
             "passwd" => {
                 if is_config {
                     let mode = PasswordMode::UpdatePassword;
